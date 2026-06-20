@@ -6,7 +6,7 @@ import os
 s3 = boto3.client('s3')
 BUCKET_NAME = 'rekognition-upload-bucket-001'
 
-# ─── CORS Headers ───
+# CORS configuration
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST,OPTIONS",
