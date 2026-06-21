@@ -8,8 +8,8 @@ import os
 s3 = boto3.client('s3')
 polly = boto3.client('polly')
 
-# Load the API Key from Lambda environment variables
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+# Load the API Key from Lambda environment variables and sanitize it
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '').strip().replace('"', '').replace("'", "")
 
 def lambda_handler(event, context):
     try:
@@ -60,8 +60,29 @@ def lambda_handler(event, context):
             method='POST'
         )
         
-        with urllib.request.urlopen(req) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
+        try:
+            with urllib.request.urlopen(req) as response:
+                res_data = json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as he:
+            print(f"Gemini API HTTP Error: {he.code} - {he.reason}")
+            try:
+                error_body = he.read().decode('utf-8')
+                print(f"Error response body: {error_body}")
+            except Exception:
+                pass
+            
+            if he.code == 404:
+                print("Diagnostic: Received 404. Attempting to list available models for key...")
+                try:
+                    diag_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+                    diag_req = urllib.request.Request(diag_url, method='GET')
+                    with urllib.request.urlopen(diag_req) as diag_resp:
+                        diag_data = json.loads(diag_resp.read().decode('utf-8'))
+                        available_models = [m.get('name') for m in diag_data.get('models', [])]
+                        print("Diagnostic - Available models for this key:", available_models)
+                except Exception as diag_err:
+                    print("Diagnostic - Failed to list models:", diag_err)
+            raise he
             
         # Parse the description text from response
         label_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
